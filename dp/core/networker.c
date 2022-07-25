@@ -49,6 +49,7 @@
 
 bool TEST_STARTED = false;
 
+struct db_req* generate_db_req(REQ_TYPE type, struct mbuf * temp);
 /**
  * do_networking - implements networking core's functionality
  */
@@ -91,7 +92,7 @@ void do_fake_networking(void)
 	log_info("Test started\n");
 
 
-	while (packet_counter < BENCHMARK_NO_PACKETS + 2)
+	while (packet_counter < BENCHMARK_NO_PACKETS)
 	{
 		while (networker_pointers.cnt != 0);
 
@@ -102,25 +103,13 @@ void do_fake_networking(void)
 
 		networker_pointers.free_cnt = 0;
 
-		for (t = 0; t < ETH_RX_MAX_BATCH; t++)
+		for (t = 0; t < ETH_RX_MAX_BATCH && packet_counter < BENCHMARK_NO_PACKETS; t++)
 		{
 			struct mbuf* temp = mbuf_alloc_local();
+			// generate_benchmark_request(temp,packet_counter);
 
-			struct custom_payload *
-				req = mbuf_mtod(temp, struct custom_payload *);
+			generate_db_req(t%4, temp);
 
-			req->id = t + 1;
-
-			#if BENCHMARK_TYPE == 1
-			req->ns = (rand() % 2) ? 1 * 1000 : 100 * 1000;
-			#elif BENCHMARK_TYPE == 2
-			req->ns = (rand() % 1000) < 995 ? 0.5 * 1000 : 500 * 1000;
-			#else
-			// No Benchmark Provided
-			#endif
-
-			req->timestamp = get_us();
-			
 			// -------- Send --------
 			networker_pointers.pkts[t] = temp;
 			networker_pointers.types[t] = 0; 	// For now, only 1 port/type
@@ -130,4 +119,48 @@ void do_fake_networking(void)
 		
 		networker_pointers.cnt = ETH_RX_MAX_BATCH;
 	}
+}
+
+struct db_req* generate_db_req(REQ_TYPE type, struct mbuf * temp)
+{
+	struct db_req* req = mbuf_mtod(temp, struct db_req *);
+
+	if (type == DB_GET)
+	{
+		req->type = DB_GET;
+		strcpy(req->key, "musakey");
+		strcpy(req->value, "musavalue");
+	} 
+	else if(type == DB_ITERATOR)
+	{
+		req->type = DB_ITERATOR;
+	}
+	else
+	{
+		req->type = DB_GET;
+		strcpy(req->key, "musakey");
+		strcpy(req->value, "musavalue");
+	}
+
+	req->timestamp = get_ns();
+	return req;
+}
+
+struct custom_payload* generate_benchmark_request(struct mbuf* temp, uint64_t t) 
+{
+	struct custom_payload *
+	req = mbuf_mtod(temp, struct custom_payload *);
+
+	req->id = t + 1;
+
+	#if BENCHMARK_TYPE == 1
+	req->ns = (rand() % 2) ? 1 * 1000 : 100 * 1000;
+	#elif BENCHMARK_TYPE == 2
+	req->ns = (rand() % 1000) < 995 ? 0.5 * 1000 : 500 * 1000;
+	#else
+	// No Benchmark Provided
+	#endif
+
+	req->timestamp = get_us();
+	return req;
 }
